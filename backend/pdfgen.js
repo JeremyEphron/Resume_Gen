@@ -34,7 +34,7 @@ const set_up_doc = function(schema) {
 	const doc = new PDFDocument({
 		margins : {
 			top:72, 
-			bottom:36, 
+			bottom:30, 
 			right:36, 
 			left:36
 		}
@@ -260,6 +260,11 @@ const make_segments = function(doc, schema, size) {
 
 const getLines = function(line, size, docWidth) {
 	const defaultWidth = fontinfo[3]['W'];
+	let pageWidth      = docWidth;
+	if (line.bullet) {
+		let bulletWidth = 35;
+		pageWidth = docWidth - bulletWidth;
+	}
 
 	//Length of the title of the line
 	let width = 0;
@@ -271,21 +276,26 @@ const getLines = function(line, size, docWidth) {
 
 	//Length of the content of the line
 	if (line.content) {
-		for (let i = 0; i < line.content.length; i++) {
-			width += (fontinfo[3][line.content[i]] || defaultWidth) * size;
+		const words = line.content.split(' ');
+		for (let i = 0; i < words.length; i++) {
+			let wordWidth = 0;
+			for (let j = 0; j < words[i].length; j++) {
+				wordWidth += (fontinfo[3][words[i][j]] || defaultWidth) * size;
+			}
+			if (i !== 0 && i < words.length - 1){
+				wordWidth += fontinfo[3][" "] * size;
+			}
+			if (width + wordWidth > Math.ceil((width + 0.001)/pageWidth)*pageWidth) {
+				width = Math.ceil(width/pageWidth)*pageWidth + wordWidth;
+			}
+			else {
+				width += wordWidth;
+			}
 		}
 	}
 
-	//If using bullet points make sure to space according to indent
-	if (line.bullet) {
-		let bulletWidth = 36;
-		const docBulletWidth = docWidth - bulletWidth;
-
-		return Math.ceil(width / docBulletWidth);
-	}
-
 	//number of lines being used
-	return Math.ceil(width / docWidth);
+	return Math.ceil(width / pageWidth);
 }
 
 const sizeFits = function(doc, schema, size) {
@@ -317,12 +327,10 @@ const sizeFits = function(doc, schema, size) {
 		}
 	}
 
-	const k = 1.14;
+	const k = 1.4;
 	const c = 0.3;
-	const f = 1.28;
-	console.log(docHeight, size * ((lines * f) + (segments * k) + (items * c)));
-	console.log(size, lines, segments, items);
-	return docHeight >= size * ((lines * f) + (segments * k) + (items * c));
+	const f = 1.21;
+	return docHeight >= size * ((lines * f) + (12*(segments * k)/size) + (items * c));
 }
 
 //Make font size based on lines of text in the PDF
@@ -331,6 +339,9 @@ const make_size = function(doc, schema) {
 	let size = 12;
 	while (!sizeFits(doc, schema, size)) {
 		size -= 0.1;
+		if (size <= 7.5){
+			break;
+		}
 	}
 	
 	if (size > 12) {
